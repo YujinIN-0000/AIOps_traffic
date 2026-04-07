@@ -200,19 +200,21 @@ async def init_dashboard():
     if not Path(MODEL_SAVE_PATH).exists():
         return {"model_ready": False, "message": "저장된 모델 없음"}
 
-    original_path = Path(ORIGINAL_DATA_PATH)
-    if not original_path.exists():
+    # 최근 업로드 데이터가 있으면 우선 사용
+    last_path = app_state.get("last_dataset_path")
+    candidate_path = Path(last_path) if last_path else Path(ORIGINAL_DATA_PATH)
+    if not candidate_path.exists():
         return {"model_ready": False, "message": "원본 데이터 없음"}
 
     try:
         weight_mod = importlib.import_module(".weight_used_model", package=__package__)
-        dataset    = await _read_csv_async(original_path)
+        dataset    = await _read_csv_async(candidate_path)
         plot_path, rmse, actual_list, pred_list, date_list = await asyncio.to_thread(weight_mod.process, dataset)
 
         retrain_needed = weight_mod.needs_retrain(rmse)
         app_state["last_rmse"]     = rmse
         app_state["needs_retrain"] = retrain_needed
-        # last_dataset_path는 여기서 설정하지 않음 (업로드 전이므로)
+        # last_dataset_path는 기존 값을 유지
 
         img = Path(plot_path)
         return {
@@ -226,6 +228,7 @@ async def init_dashboard():
             "actual_series"           : actual_list,
             "pred_series"             : pred_list,
             "time_index"              : date_list,
+            "retrain_history"         : app_state.get("retrain_history", []),
         }
     except Exception as e:
         return {"model_ready": False, "message": str(e)}
@@ -283,6 +286,7 @@ async def post_data_set(file: UploadFile = File(...)):
             "actual_series"           : actual_list,
             "pred_series"             : pred_list,
             "time_index"              : date_list,
+            "retrain_history"         : app_state.get("retrain_history", []),
         }
 
         # 자동 모드: 임계 초과 시 즉시 재학습
@@ -339,7 +343,10 @@ async def retrain():
             dataset = uploaded_df
 
         await asyncio.to_thread(model_mod.train_and_save, dataset)
-        new_plot, new_rmse, actual_list, pred_list, date_list = await asyncio.to_thread(weight_mod.process, dataset)
+        # 평가/시각화는 업로드 데이터 기준으로 수행
+        new_plot, new_rmse, actual_list, pred_list, date_list = await asyncio.to_thread(
+            weight_mod.process, uploaded_df
+        )
 
         app_state["last_rmse"]     = new_rmse
         app_state["needs_retrain"] = new_rmse > RMSE_THRESHOLD
@@ -361,6 +368,7 @@ async def retrain():
             "actual_series": actual_list,
             "pred_series"  : pred_list,
             "time_index"   : date_list,
+            "retrain_history": app_state.get("retrain_history", []),
             "message" : f"재학습 완료. RMSE {old_rmse:.2f} → {new_rmse:.2f}",
         }
     except HTTPException:

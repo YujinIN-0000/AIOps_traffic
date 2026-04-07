@@ -395,6 +395,10 @@ function handleUploadResult(data) {
     // 예측 그래프 표시
     renderLifecycleCharts(data);
 
+    // 전역 값 저장 (재학습 시 재사용)
+    window.lastRmse = rmse;
+    window.lastRmseThreshold = threshold;
+
     // 대시보드 표시
     showDashboard();
 
@@ -425,6 +429,17 @@ function handleUploadResult(data) {
         setPipelineStep(5, "done");
         showRetrainBanner(rmse, data.new_rmse, data.new_rmse < rmse);
         updateCompareBox(rmse, data.new_rmse);
+    }
+
+    // 재학습 이력 표시 (있을 때)
+    if (Array.isArray(data.retrain_history)) {
+        renderRetrainHistoryList(data.retrain_history);
+        if (data.retrain_history.length > 0) {
+            var last = data.retrain_history[data.retrain_history.length - 1];
+            if (last && last.old_rmse != null && last.new_rmse != null && window.updateCompareBox) {
+                window.updateCompareBox(last.old_rmse, last.new_rmse);
+            }
+        }
     }
 
     // 섹션4 대시보드로 스크롤
@@ -487,4 +502,38 @@ window.updateCompareBox = function (oldRmse, newRmse) {
         + '</div>'
         + '</div>'
         + '</div>';
+};
+
+// ── 재학습 이력 렌더 ─────────────────────────────────────────────────────────
+window.renderRetrainHistoryList = function (history) {
+    var histDiv = document.getElementById("retrainHistory");
+    if (!histDiv) return;
+    var list = Array.isArray(history) ? history : [];
+    histDiv.innerHTML = "";
+    if (list.length === 0) {
+        histDiv.innerHTML = '<div class="history-empty">재학습 이력이 없습니다.</div>';
+        return;
+    }
+    list.forEach(function (record) {
+        if (window.appendRetrainHistory) {
+            window.appendRetrainHistory(record);
+            return;
+        }
+        var improved = record.improved !== undefined
+            ? record.improved
+            : record.new_rmse < record.old_rmse;
+        var arrow = improved ? "▼ 개선" : "▲ 악화";
+        var color = improved ? "#86efac" : "#fca5a5";
+        var row = document.createElement("div");
+        row.className = "history-row";
+        row.innerHTML =
+            '<span class="history-ts">' + record.timestamp + '</span>'
+            + '<span style="color:#aaa;">[' + record.trigger + ']</span>'
+            + '<span>'
+            + '<strong>' + (record.old_rmse || 0).toFixed(2) + '</strong>'
+            + ' → <strong>' + (record.new_rmse || 0).toFixed(2) + '</strong>'
+            + '</span>'
+            + '<span style="color:' + color + '; font-weight:700;">' + arrow + '</span>';
+        histDiv.prepend(row);
+    });
 };

@@ -831,11 +831,14 @@
                     <button class="toast-close" id="btnToastClose"><i class="fa fa-times"></i></button>
                 </div>
                 <div class="retrain-toast-body">
-                    RMSE 임계값을 초과했습니다. 보고서를 확인하고 재학습 여부를 결정하세요.
+                    RMSE 임계값을 초과했습니다. 재학습 여부를 결정하세요.
                 </div>
                 <div style="display:flex; gap:6px;">
-                    <button class="btn-primary-action" id="btnViewReport">
-                        <i class="fa fa-file-alt"></i> 보고서 보기
+                    <button class="btn-primary-action" id="btnRetrain">
+                        <i class="fa fa-check"></i> 확인
+                    </button>
+                    <button class="btn-secondary-action" id="btnReject">
+                        <i class="fa fa-times"></i> 거부
                     </button>
                 </div>
             </div>

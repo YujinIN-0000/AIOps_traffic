@@ -69,8 +69,9 @@ if (modeToggle) modeToggle.addEventListener("change", function () {
 // ── 재학습 이력 추가 ──────────────────────────────────────────────────────────
 function appendRetrainHistory(record) {
     var histDiv  = document.getElementById("retrainHistory");
-    var noRecord = histDiv.querySelector("p");
-    if (noRecord) histDiv.innerHTML = "";
+    if (!histDiv) return;
+    var empty = histDiv.querySelector(".history-empty");
+    if (empty) histDiv.innerHTML = "";
 
     var improved = record.improved !== undefined
         ? record.improved
@@ -90,4 +91,91 @@ function appendRetrainHistory(record) {
         + '<span style="color:' + color + '; font-weight:700;">' + arrow + '</span>';
 
     histDiv.prepend(row);
+}
+window.appendRetrainHistory = appendRetrainHistory;
+
+// ── 대시보드 토스트: 재학습 승인/거부 ──────────────────────────────────────────
+var btnRetrain = document.getElementById("btnRetrain");
+var btnReject  = document.getElementById("btnReject");
+
+function _setToastButtonsLoading(loading) {
+    if (btnRetrain) {
+        btnRetrain.disabled = loading;
+        btnRetrain.innerHTML = loading
+            ? '<i class="fa fa-spinner fa-spin"></i> 재학습 중...'
+            : '<i class="fa fa-check"></i> 확인';
+    }
+    if (btnReject) {
+        btnReject.disabled = loading;
+    }
+}
+
+if (btnRetrain) {
+    btnRetrain.addEventListener("click", function () {
+        _setToastButtonsLoading(true);
+        fetch(API + "/retrain", { method: "POST" })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                _setToastButtonsLoading(false);
+                var toast = document.getElementById("retrainToast");
+                if (toast) toast.classList.remove("show");
+
+                // 그래프/카드 업데이트
+                if (typeof renderLifecycleCharts === "function") {
+                    renderLifecycleCharts(data);
+                }
+                if (typeof updateKPI === "function") {
+                    updateKPI(data.new_rmse, window.lastRmseThreshold || 200, data.needs_retrain);
+                }
+                if (window.showRetrainBanner) {
+                    window.showRetrainBanner(data.old_rmse, data.new_rmse, data.improved);
+                }
+                if (window.updateCompareBox) {
+                    window.updateCompareBox(data.old_rmse, data.new_rmse);
+                }
+                if (Array.isArray(data.retrain_history) && window.renderRetrainHistoryList) {
+                    window.renderRetrainHistoryList(data.retrain_history);
+                } else {
+                    appendRetrainHistory({
+                        timestamp: new Date().toISOString(),
+                        trigger: "manual_approve",
+                        old_rmse: data.old_rmse,
+                        new_rmse: data.new_rmse,
+                        improved: data.improved
+                    });
+                }
+
+                if (typeof setPipelineStep === "function") {
+                    setPipelineStep(4, "done");
+                    setPipelineStep(5, "done");
+                }
+                window.lastRmse = data.new_rmse;
+            })
+            .catch(function (err) {
+                _setToastButtonsLoading(false);
+                alert("재학습 중 오류: " + err.message);
+            });
+    });
+}
+
+if (btnReject) {
+    btnReject.addEventListener("click", function () {
+        btnReject.disabled = true;
+        if (btnRetrain) btnRetrain.disabled = true;
+        fetch(API + "/reject", { method: "POST" })
+            .then(function (r) { return r.json(); })
+            .then(function () {
+                var toast = document.getElementById("retrainToast");
+                if (toast) toast.classList.remove("show");
+                if (typeof setPipelineStep === "function") {
+                    setPipelineStep(4, "done");
+                    setPipelineStep(5, "done");
+                }
+            })
+            .catch(function (err) {
+                btnReject.disabled = false;
+                if (btnRetrain) btnRetrain.disabled = false;
+                alert("거부 처리 중 오류: " + err.message);
+            });
+    });
 }
