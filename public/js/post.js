@@ -72,54 +72,6 @@ function renderLifecycleCharts(payload) {
     var rmseSeries = _rollingRmse(actual, predicted, 144);
     var phase = _findRetrainAndRecover(rmseSeries, threshold);
 
-    var zoneAnnotations = {};
-    if (phase.retrainIdx < 0) {
-        zoneAnnotations.zone1 = {
-            type: "box",
-            xMin: 0, xMax: labels.length - 1,
-            backgroundColor: "rgba(16,185,129,0.07)",
-            borderColor: "transparent",
-        };
-    } else {
-        zoneAnnotations.zone1 = {
-            type: "box",
-            xMin: 0, xMax: Math.max(0, phase.retrainIdx - 1),
-            backgroundColor: "rgba(16,185,129,0.07)",
-            borderColor: "transparent",
-        };
-        zoneAnnotations.zone2 = {
-            type: "box",
-            xMin: phase.retrainIdx, xMax: (phase.recoverIdx > 0 ? phase.recoverIdx - 1 : labels.length - 1),
-            backgroundColor: "rgba(239,68,68,0.07)",
-            borderColor: "transparent",
-        };
-        if (phase.recoverIdx > 0) {
-            zoneAnnotations.zone3 = {
-                type: "box",
-                xMin: phase.recoverIdx, xMax: labels.length - 1,
-                backgroundColor: "rgba(99,102,241,0.07)",
-                borderColor: "transparent",
-            };
-        }
-        zoneAnnotations.retrainLine = {
-            type: "line",
-            xMin: phase.retrainIdx, xMax: phase.retrainIdx,
-            borderColor: "rgba(245,158,11,0.85)",
-            borderWidth: 2,
-            borderDash: [5, 4],
-            label: {
-                display: true,
-                content: "재학습",
-                color: "#fcd34d",
-                backgroundColor: "rgba(245,158,11,0.15)",
-                borderRadius: 4,
-                padding: { x: 6, y: 3 },
-                font: { size: 10, weight: "600" },
-                position: "start",
-            }
-        };
-    }
-
     if (lifecycleChart) lifecycleChart.destroy();
     if (rmseChart) rmseChart.destroy();
 
@@ -177,7 +129,7 @@ function renderLifecycleCharts(payload) {
                             }
                         }
                     },
-                    annotation: { annotations: zoneAnnotations }
+                    annotation: { annotations: {} }
                 },
                 scales: {
                     x: {
@@ -312,20 +264,21 @@ window.hideLoading = function () {
 };
 
 // ── KPI 카드 업데이트 ─────────────────────────────────────────────────────────
-function updateKPI(rmse, threshold, needs) {
+function updateKPI(rmse, threshold, needs, isInit) {
+    var isInitial = !!isInit;
     // RMSE 값
-    document.getElementById("kpiRmseVal").textContent = rmse.toFixed(2);
+    document.getElementById("kpiRmseVal").textContent = isInitial ? "-" : rmse.toFixed(2);
     var rmseCard = document.getElementById("kpi-rmse");
-    rmseCard.classList.toggle("warn", needs);
-    rmseCard.classList.toggle("ok",   !needs);
+    rmseCard.classList.toggle("warn", !isInitial && needs);
+    rmseCard.classList.toggle("ok",   !isInitial && !needs);
 
     // 상태
-    document.getElementById("kpiStatusVal").textContent = needs ? "초과" : "정상";
+    document.getElementById("kpiStatusVal").textContent = isInitial ? "-" : (needs ? "초과" : "정상");
     document.getElementById("kpiStatusSub").textContent =
-        needs ? "재학습 권고" : "임계값 이내";
+        isInitial ? "-" : (needs ? "재학습 권고" : "임계값 이내");
     var statusCard = document.getElementById("kpi-status");
-    statusCard.classList.toggle("warn", needs);
-    statusCard.classList.toggle("ok",   !needs);
+    statusCard.classList.toggle("warn", !isInitial && needs);
+    statusCard.classList.toggle("ok",   !isInitial && !needs);
 
     // 임계값
     document.getElementById("kpiThreshVal").textContent = threshold;
@@ -391,6 +344,7 @@ function handleUploadResult(data) {
     var rmse      = data.result_evaluating_LSTM;
     var threshold = data.rmse_threshold;
     var needs     = data.needs_retrain;
+    var isInit    = !!data.skip_retrain_check;
 
     // 예측 그래프 표시
     renderLifecycleCharts(data);
@@ -403,7 +357,7 @@ function handleUploadResult(data) {
     showDashboard();
 
     // KPI 카드
-    updateKPI(rmse, threshold, needs);
+    updateKPI(rmse, threshold, needs, isInit);
 
     // 모드 토글 동기화 (hidden checkbox, manual 고정)
     var modeToggle = document.getElementById("modeToggle");
@@ -411,7 +365,7 @@ function handleUploadResult(data) {
 
     // 재학습 토스트 표시
     var toast = document.getElementById("retrainToast");
-    if (needs && toast) {
+    if (!isInit && needs && toast) {
         toast.classList.add("show");
     }
 
