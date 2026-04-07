@@ -84,7 +84,7 @@ python -m uvicorn server_model.main:app --port 8001 --reload
 
 ```
 1. 대시보드 접속 → 기존 모델로 원본 데이터 초기 예측 표시
-2. CSV 파일 업로드 → 자동으로 예측 실행 및 RMSE 계산
+2. milan_telecom_December_2013.CSV 파일 업로드 → 자동으로 예측 실행 및 RMSE 계산
 3. RMSE 임계값 초과 시 → 토스트 알림 표시
 4. [보고서 보기] 클릭 → LLM 성능 분석 보고서 확인
 5. 보고서 하단에서 재학습 [확인] 또는 [거부] 선택
@@ -152,7 +152,6 @@ python -m uvicorn server_model.main:app --port 8001 --reload
 
 ```python
 LOOKBACK        = 1008   # 시퀀스 길이 (7일 × 144 스텝)
-TRAIN_RATIO     = 0.72   # 학습 데이터 비율
 RMSE_THRESHOLD  = 200.0  # 재학습 판정 임계값
 ```
 
