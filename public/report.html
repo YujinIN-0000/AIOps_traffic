@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <title>TeleAI Ops — 분석 보고서</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+
+    <style>
+    :root {
+        --bg-page:    #F5F5F5;
+        --bg-sidebar: #1C2333;
+        --bg-card:    #FFFFFF;
+
+        --border:     #E2E8F0;
+        --border-md:  #CBD5E1;
+
+        --accent:     #1A56DB;
+        --accent-lt:  #EBF2FF;
+        --accent-dk:  #1447B4;
+
+        --green:      #0D9356;
+        --green-lt:   #ECFDF5;
+        --red:        #DC2626;
+        --red-lt:     #FEF2F2;
+        --yellow:     #D97706;
+
+        --text-1:     #111827;
+        --text-2:     #374151;
+        --text-3:     #6B7280;
+        --text-4:     #9CA3AF;
+
+        --nav-text:   #A0AEC0;
+        --nav-active: #FFFFFF;
+
+        --r-sm: 4px;
+        --r-md: 6px;
+        --r-lg: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg-page);
+        color: var(--text-1);
+        -webkit-font-smoothing: antialiased;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+
+    /* ── LAYOUT ── */
+    #outer { display: flex !important; min-height: 100vh !important; padding: 0 !important; }
+
+    /* ── SIDEBAR ── */
+    #tm-header {
+        position: fixed !important; top: 0 !important; left: 0 !important;
+        width: 220px !important; height: 100vh !important;
+        background: var(--bg-sidebar) !important;
+        border-right: 1px solid rgba(255,255,255,0.06) !important;
+        z-index: 2000 !important; display: flex !important;
+        flex-direction: column !important; padding: 0 !important; gap: 0 !important;
+        overflow: hidden;
+    }
+    .sidebar-brand {
+        display: flex; align-items: center; gap: 8px;
+        padding: 16px 16px 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .brand-logo {
+        width: 28px; height: 28px;
+        background: var(--accent);
+        border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 12px;
+    }
+    .brand-title { font-size: 13px; font-weight: 600; color: #fff; }
+    .brand-sub   { font-size: 10px; color: var(--nav-text); margin-top: 1px; }
+    .sidebar-section-label {
+        font-size: 10px; font-weight: 600; letter-spacing: .08em;
+        text-transform: uppercase; color: rgba(255,255,255,0.3);
+        padding: 16px 16px 6px;
+    }
+
+    #tm-header .navbar { width: 100% !important; padding: 0 !important; margin: 0 !important; }
+    #tm-header .collapse { display: block !important; }
+    #tm-header .navbar-collapse { padding: 0 !important; }
+    #tm-header .navbar-collapse::before { display: none !important; }
+    #tm-header .navbar-nav {
+        display: flex !important; flex-direction: column !important;
+        gap: 1px !important; margin: 0 !important; padding: 4px 8px !important;
+        list-style: none !important;
+    }
+    #tm-header .nav-item { background: none !important; padding: 0 !important; margin: 0 !important; }
+    #tm-header .nav-link {
+        display: flex !important; align-items: center !important; gap: 8px !important;
+        padding: 8px 10px !important; border-radius: var(--r-sm) !important;
+        font-size: 13px !important; font-weight: 400 !important;
+        color: var(--nav-text) !important; background: transparent !important;
+        border: none !important; text-decoration: none !important;
+        transition: background .15s, color .15s !important;
+    }
+    #tm-header .nav-link i { width: 14px; font-size: 12px; text-align: center; opacity: .7; }
+    #tm-header .nav-link:hover {
+        color: var(--nav-active) !important;
+        background: rgba(255,255,255,0.06) !important;
+    }
+    #tm-header .nav-link.active {
+        color: var(--nav-active) !important;
+        background: rgba(26,86,219,0.35) !important;
+        font-weight: 500 !important;
+    }
+    .navbar-button { display: none !important; }
+
+    /* ── CONTENT ── */
+    #content-box {
+        margin-left: 220px !important; margin-top: 0 !important;
+        padding: 0 !important; width: calc(100% - 220px) !important;
+        max-width: 100% !important; display: flex !important;
+        flex-direction: column !important; gap: 0 !important;
+    }
+
+    /* ── TOP BAR ── */
+    .top-bar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 20px;
+        background: #fff;
+        border-bottom: 1px solid var(--border);
+    }
+    .top-bar-title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+    .top-bar-sep   { color: var(--border-md); font-size: 16px; font-weight: 300; }
+    .top-bar-sub   { font-size: 12px; color: var(--text-3); }
+    .top-bar-back  {
+        margin-left: auto;
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 10px;
+        background: transparent;
+        border: 1px solid var(--border-md);
+        border-radius: var(--r-sm);
+        font-size: 11px; font-weight: 500; color: var(--text-3);
+        cursor: pointer; text-decoration: none;
+        transition: all .15s; font-family: 'Inter', sans-serif;
+    }
+    .top-bar-back:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+
+    /* ── PAGE BODY ── */
+    .page-body { padding: 16px 20px 32px; }
+
+    /* ── REPORT CARD ── */
+    .report-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+    }
+    .report-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+    .report-head-title { font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .report-body { padding: 16px 18px; }
+
+    #reportMeta {
+        font-size: 11px; color: var(--text-4);
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+    }
+    .meta-pill {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 11px; font-weight: 500;
+        margin-right: 6px;
+    }
+    .meta-ok   { background: #ECFDF5; color: var(--green); border: 1px solid #A7F3D0; }
+    .meta-warn { background: #FEF2F2; color: var(--red);   border: 1px solid #FECACA; }
+
+    #reportContent {
+        white-space: pre-wrap;
+        color: var(--text-2);
+        line-height: 1.8;
+        font-size: 13px;
+    }
+    #reportContent h1, #reportContent h2, #reportContent h3 {
+        color: var(--text-1);
+        margin: 10px 0 6px;
+        font-weight: 600;
+    }
+    #reportContent h1 { font-size: 15px; }
+    #reportContent h2 { font-size: 14px; }
+    #reportContent h3 { font-size: 13px; }
+    #reportContent ul { padding-left: 18px; margin: 6px 0; }
+    #reportContent li { margin: 3px 0; }
+    #reportContent strong { color: var(--text-1); }
+    #reportContent code {
+        background: #EEF2FF;
+        color: #1E3A8A;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+    #reportContent pre {
+        background: #F3F4F6;
+        padding: 8px 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+        color: #111827;
+    }
+
+    /* ── RETRAIN ACTION BOX ── */
+    .retrain-action-box {
+        margin-top: 16px;
+        padding: 14px 16px;
+        background: #FFFBEB;
+        border: 1px solid #FDE68A;
+        border-left: 3px solid var(--yellow);
+        border-radius: var(--r-md);
+    }
+    .retrain-action-title {
+        font-size: 12px; font-weight: 600;
+        color: #92400E;
+        margin-bottom: 4px;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .retrain-action-desc {
+        font-size: 11px; color: #78350F;
+        margin-bottom: 12px; line-height: 1.6;
+    }
+    .retrain-btn-row { display: flex; gap: 8px; }
+    .btn-retrain-confirm {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 14px;
+        background: var(--accent); border: none;
+        border-radius: var(--r-sm);
+        font-size: 12px; font-weight: 500; color: #fff;
+        cursor: pointer; font-family: 'Inter', sans-serif;
+        transition: background .15s;
+    }
+    .btn-retrain-confirm:hover    { background: var(--accent-dk); }
+    .btn-retrain-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-retrain-reject {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 14px;
+        background: #fff;
+        border: 1px solid var(--border-md);
+        border-radius: var(--r-sm);
+        font-size: 12px; font-weight: 500; color: var(--text-2);
+        cursor: pointer; font-family: 'Inter', sans-serif;
+        transition: all .15s;
+    }
+    .btn-retrain-reject:hover { border-color: var(--red); color: var(--red); background: var(--red-lt); }
+
+    #retrainResultMsg {
+        margin-top: 10px;
+        font-size: 12px;
+        display: none;
+        padding: 8px 12px;
+        border-radius: var(--r-sm);
+        background: var(--green-lt);
+        color: var(--green);
+        border: 1px solid #A7F3D0;
+    }
+
+    @media (max-width: 900px) {
+        #tm-header {
+            position: fixed !important; width: 100% !important; height: 48px !important;
+            flex-direction: row !important; align-items: center !important; padding: 0 12px !important;
+        }
+        .sidebar-brand { border: none; padding: 0 8px 0 0; }
+        .sidebar-section-label { display: none; }
+        #tm-header .navbar-nav { flex-direction: row !important; padding: 0 !important; }
+        #tm-header .nav-link { padding: 6px 10px !important; font-size: 12px !important; }
+        #content-box { margin-left: 0 !important; margin-top: 48px !important; width: 100% !important; }
+    }
+    </style>
+</head>
+<body>
+<div id="outer">
+
+    <!-- SIDEBAR -->
+    <header class="header order-last" id="tm-header">
+        <div class="sidebar-brand">
+            <div class="brand-logo"><i class="fa fa-satellite-dish"></i></div>
+            <div>
+                <div class="brand-title">TeleAI Ops</div>
+                <div class="brand-sub">트래픽 예측 시스템</div>
+            </div>
+        </div>
+        <div class="sidebar-section-label">메뉴</div>
+        <nav class="navbar">
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="/"><i class="fa fa-chart-line"></i> 운영 대시보드</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/report.html"><i class="fa fa-file-alt"></i> 분석 보고서</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <main id="content-box" class="order-first">
+
+        <!-- TOP BAR -->
+        <div class="top-bar">
+            <span class="top-bar-title">분석 보고서</span>
+            <span class="top-bar-sep">|</span>
+            <span class="top-bar-sub">LLM 기반 모델 성능 분석</span>
+            <a class="top-bar-back" href="/">
+                <i class="fa fa-arrow-left" style="font-size:10px;"></i> 대시보드로
+            </a>
+        </div>
+
+        <!-- REPORT CONTENT -->
+        <div class="page-body">
+            <div class="report-card">
+                <div class="report-head">
+                    <div class="report-head-title">모델 성능 분석 보고서</div>
+                </div>
+                <div class="report-body">
+                    <div id="reportMeta">불러오는 중...</div>
+                    <div id="reportContent">보고서를 불러오는 중입니다.</div>
+
+                    <!-- 재학습 결정 -->
+                    <div class="retrain-action-box" id="retrainActionBox" style="display:none;">
+                        <div class="retrain-action-title">
+                            <i class="fa fa-triangle-exclamation"></i> 재학습 결정
+                        </div>
+                        <div class="retrain-action-desc">
+                            업로드된 데이터와 기존 학습 데이터를 합산하여 모델을 재학습합니다.
+                        </div>
+                        <div class="retrain-btn-row">
+                            <button class="btn-retrain-confirm" id="btnReportRetrain">
+                                <i class="fa fa-check"></i> 재학습 확인
+                            </button>
+                            <button class="btn-retrain-reject" id="btnReportReject">
+                                <i class="fa fa-times"></i> 거부
+                            </button>
+                        </div>
+                        <div id="retrainResultMsg"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="js/report.js"></script>
+</body>
+</html>

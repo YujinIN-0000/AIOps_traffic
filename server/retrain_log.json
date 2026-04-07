@@ -1,0 +1,8 @@
+[
+  {
+    "timestamp": "2026-04-07T13:08:38.787768+09:00",
+    "action": "reject",
+    "rmse": 296.5615,
+    "rmse_threshold": 200.0
+  }
+]

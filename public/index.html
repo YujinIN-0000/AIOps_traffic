@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <title>TeleAI Ops — 텔레콤 트래픽 예측 시스템</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+
+    <style>
+    /* ════════════════════════════════════════════════════════════════
+       DESIGN SYSTEM — Enterprise / Grafana-like
+    ════════════════════════════════════════════════════════════════ */
+    :root {
+        --bg-page:    #F5F5F5;
+        --bg-sidebar: #1C2333;
+        --bg-card:    #FFFFFF;
+        --bg-hover:   #F0F4FF;
+
+        --border:     #E2E8F0;
+        --border-md:  #CBD5E1;
+
+        --accent:     #1A56DB;
+        --accent-lt:  #EBF2FF;
+        --accent-dk:  #1447B4;
+
+        --green:      #0D9356;
+        --green-lt:   #ECFDF5;
+        --red:        #DC2626;
+        --red-lt:     #FEF2F2;
+        --yellow:     #D97706;
+        --yellow-lt:  #FFFBEB;
+
+        --text-1:     #111827;
+        --text-2:     #374151;
+        --text-3:     #6B7280;
+        --text-4:     #9CA3AF;
+
+        --nav-text:   #A0AEC0;
+        --nav-active: #FFFFFF;
+
+        --r-xs:  3px;
+        --r-sm:  4px;
+        --r-md:  6px;
+        --r-lg:  8px;
+    }
+
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg-page);
+        color: var(--text-1);
+        -webkit-font-smoothing: antialiased;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    /* custom scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+
+    /* ══════════════════════════════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════════════════════════════ */
+    #outer {
+        display: flex !important;
+        min-height: 100vh !important;
+        padding: 0 !important;
+    }
+
+    /* ── LEFT SIDEBAR ── */
+    #tm-header {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 220px !important;
+        height: 100vh !important;
+        background: var(--bg-sidebar) !important;
+        border-right: 1px solid rgba(255,255,255,0.06) !important;
+        z-index: 2000 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        overflow: hidden;
+    }
+
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 16px 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .brand-logo {
+        width: 28px; height: 28px;
+        background: var(--accent);
+        border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff;
+        font-size: 12px;
+    }
+    .brand-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        letter-spacing: 0;
+    }
+    .brand-sub {
+        font-size: 10px;
+        color: var(--nav-text);
+        margin-top: 1px;
+    }
+
+    .sidebar-section-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.3);
+        padding: 16px 16px 6px;
+    }
+
+    #tm-header .navbar {
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    #tm-header .collapse { display: block !important; }
+    #tm-header .navbar-collapse { padding: 0 !important; }
+    #tm-header .navbar-collapse::before { display: none !important; }
+    #tm-header .navbar-nav {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1px !important;
+        margin: 0 !important;
+        padding: 4px 8px !important;
+        list-style: none !important;
+    }
+    #tm-header .nav-item {
+        background: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    #tm-header .nav-link {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 8px 10px !important;
+        border-radius: var(--r-sm) !important;
+        font-size: 13px !important;
+        font-weight: 400 !important;
+        color: var(--nav-text) !important;
+        background: transparent !important;
+        border: none !important;
+        transition: background .15s, color .15s !important;
+        text-decoration: none;
+    }
+    #tm-header .nav-link i {
+        width: 14px;
+        font-size: 12px;
+        text-align: center;
+        opacity: .7;
+    }
+    #tm-header .nav-link:hover {
+        color: var(--nav-active) !important;
+        background: rgba(255,255,255,0.06) !important;
+    }
+    #tm-header .nav-link.active {
+        color: var(--nav-active) !important;
+        background: rgba(26,86,219,0.35) !important;
+        font-weight: 500 !important;
+    }
+
+    /* ── CONTENT ── */
+    #content-box {
+        margin-left: 220px !important;
+        margin-top: 0 !important;
+        padding: 0 !important;
+        width: calc(100% - 220px) !important;
+        max-width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+    }
+
+    .navbar-button { display: none !important; }
+
+    @media (max-width: 900px) {
+        #tm-header {
+            position: fixed !important;
+            width: 100% !important;
+            height: 48px !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            padding: 0 12px !important;
+        }
+        .sidebar-brand { border: none; padding: 0 8px 0 0; }
+        .sidebar-section-label { display: none; }
+        #tm-header .navbar-nav { flex-direction: row !important; padding: 0 !important; }
+        #tm-header .nav-link { padding: 6px 10px !important; font-size: 12px !important; }
+        #content-box {
+            margin-left: 0 !important;
+            margin-top: 48px !important;
+            width: 100% !important;
+        }
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       TOP BAR
+    ════════════════════════════════════════════════════════════════ */
+    .top-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        background: #fff;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    .top-bar-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-1);
+    }
+    .top-bar-sep {
+        color: var(--border-md);
+        font-size: 16px;
+        font-weight: 300;
+    }
+    .top-bar-sub {
+        font-size: 12px;
+        color: var(--text-3);
+    }
+    .top-bar-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       LOADING OVERLAY
+    ════════════════════════════════════════════════════════════════ */
+    #loadingOverlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(4px);
+        z-index: 9999;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .loading-ring {
+        width: 32px; height: 32px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loadingMsg {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--text-3);
+        text-align: center;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       DASHBOARD LAYOUT
+    ════════════════════════════════════════════════════════════════ */
+    #section-4 {
+        padding: 16px 20px 32px;
+    }
+
+    /* KPI GRID */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .kpi-grid { grid-template-columns: 1fr; } }
+
+    .kpi-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 14px 16px;
+        transition: border-color .2s;
+    }
+    .kpi-card:hover { border-color: var(--border-md); }
+
+    .kpi-card.ok   { border-left: 3px solid var(--green); }
+    .kpi-card.warn { border-left: 3px solid var(--red); }
+
+    .kpi-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-3);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+    .kpi-value {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--text-1);
+        line-height: 1.1;
+        letter-spacing: -.01em;
+    }
+    .kpi-card.ok   .kpi-value { color: var(--green); }
+    .kpi-card.warn .kpi-value { color: var(--red); }
+    .kpi-sub {
+        font-size: 11px;
+        color: var(--text-4);
+        margin-top: 4px;
+    }
+
+    /* CARDS */
+    .dash-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 0;
+        height: 100%;
+        transition: border-color .2s;
+    }
+    .dash-card:hover { border-color: var(--border-md); }
+
+    .dash-card-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+    .dash-card-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-2);
+    }
+    .dash-card-body {
+        padding: 14px;
+    }
+
+    .chart-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 0;
+        transition: border-color .2s;
+    }
+    .chart-card-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+    .chart-card-body {
+        padding: 14px;
+    }
+
+    /* refresh button */
+    .replay-btn {
+        margin-left: auto;
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 10px;
+        background: transparent;
+        border: 1px solid var(--border-md);
+        border-radius: var(--r-sm);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-3);
+        cursor: pointer;
+        transition: all .15s;
+        font-family: 'Inter', sans-serif;
+    }
+    .replay-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    /* UPLOAD AREA */
+    .upload-area {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 10px 0 4px;
+    }
+    .file-btn-label {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 14px;
+        background: #fff;
+        border: 1px solid var(--border-md);
+        border-radius: var(--r-sm);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-2);
+        cursor: pointer;
+        transition: all .15s;
+        font-family: 'Inter', sans-serif;
+    }
+    .file-btn-label:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-lt);
+    }
+    #fileUpload { display: none; }
+    #fileNameDisplay {
+        font-size: 12px;
+        color: var(--text-3);
+        font-family: ui-monospace, monospace;
+    }
+    .upload-note {
+        font-size: 11px;
+        color: var(--text-4);
+        margin-top: 8px;
+        display: flex; align-items: center; gap: 5px;
+        line-height: 1.5;
+    }
+
+    /* RETRAIN RESULT BANNER */
+    #retrainResultBanner {
+        display: none;
+        padding: 10px 14px;
+        background: var(--green-lt);
+        border: 1px solid #BBF7D0;
+        border-radius: var(--r-md);
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: #065F46;
+        line-height: 1.6;
+    }
+
+    /* STATUS PILLS */
+    .status-pill {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .pill-ok   { background: var(--green-lt); color: var(--green); border: 1px solid #A7F3D0; }
+    .pill-warn { background: var(--red-lt);   color: var(--red);   border: 1px solid #FECACA; }
+    .pill-grey { background: #F3F4F6; color: var(--text-3); border: 1px solid var(--border); }
+
+    /* COMPARE BOX */
+    .compare-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        flex-wrap: wrap;
+        padding: 20px;
+        background: #F9FAFB;
+        border-radius: var(--r-md);
+        border: 1px solid var(--border);
+    }
+    .c-item { text-align: center; }
+    .c-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-4);
+        margin-bottom: 4px;
+    }
+    .c-val {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -.01em;
+        line-height: 1;
+    }
+    .c-unit { font-size: 12px; font-weight: 400; color: var(--text-3); margin-left: 2px; }
+    .c-arrow { font-size: 20px; color: var(--border-md); }
+    .c-improve { color: var(--green); }
+    .c-worsen  { color: var(--red); }
+    .c-neutral { color: var(--text-1); }
+    .compare-empty {
+        text-align: center;
+        padding: 24px 16px;
+        color: var(--text-4);
+        font-size: 12px;
+        line-height: 1.6;
+    }
+
+    /* HISTORY */
+    .history-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-ts { font-size: 11px; color: var(--text-4); font-family: ui-monospace, monospace; }
+    .history-trigger {
+        font-size: 10px;
+        padding: 1px 6px;
+        background: #F3F4F6;
+        border-radius: 3px;
+        color: var(--text-3);
+        border: 1px solid var(--border);
+    }
+    .history-rmse { font-size: 12px; color: var(--text-2); }
+    .history-rmse strong { font-family: ui-monospace, monospace; }
+    .history-delta { font-size: 11px; font-weight: 600; }
+    .delta-ok  { color: var(--green); }
+    .delta-bad { color: var(--red); }
+
+    .history-empty {
+        text-align: center;
+        padding: 20px 16px;
+        color: var(--text-4);
+        font-size: 12px;
+    }
+
+    /* EMPTY STATE */
+    #noPrediction {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-4);
+    }
+    #noPrediction .empty-icon {
+        width: 48px; height: 48px;
+        margin: 0 auto 14px;
+        background: #F3F4F6;
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px;
+        color: var(--text-4);
+    }
+    #noPrediction h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-2);
+        margin-bottom: 6px;
+    }
+    #noPrediction p { font-size: 12px; max-width: 280px; margin: 0 auto; line-height: 1.6; }
+
+    /* TOAST */
+    .retrain-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: none;
+        z-index: 9998;
+        width: min(380px, 92vw);
+    }
+    .retrain-toast.show { display: block; }
+    .retrain-toast-card {
+        background: #fff;
+        border: 1px solid #FECACA;
+        border-left: 3px solid var(--red);
+        border-radius: var(--r-lg);
+        padding: 12px 14px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    }
+    .retrain-toast-head {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+    }
+    .retrain-toast-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--red);
+    }
+    .retrain-toast-body {
+        color: var(--text-2);
+        line-height: 1.5;
+        font-size: 12px;
+        margin-bottom: 8px;
+    }
+    .toast-close {
+        margin-left: auto;
+        background: transparent;
+        border: none;
+        color: var(--text-3);
+        cursor: pointer;
+        padding: 2px 4px;
+        font-size: 12px;
+    }
+    .toast-close:hover { color: var(--text-1); }
+
+    /* BUTTONS */
+    .btn-primary-action {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 14px;
+        background: var(--accent);
+        border: none; border-radius: var(--r-sm);
+        font-size: 12px; font-weight: 500;
+        color: #fff; cursor: pointer;
+        transition: background .15s;
+        font-family: 'Inter', sans-serif;
+    }
+    .btn-primary-action:hover { background: var(--accent-dk); }
+
+    .btn-secondary-action {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 14px;
+        background: #fff;
+        border: 1px solid var(--border-md);
+        border-radius: var(--r-sm);
+        font-size: 12px; font-weight: 500;
+        color: var(--text-2); cursor: pointer;
+        transition: all .15s;
+        font-family: 'Inter', sans-serif;
+    }
+    .btn-secondary-action:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+
+    /* SCALE NOTICE */
+    .scale-notice {
+        background: #EFF6FF;
+        border: 1px solid #BFDBFE;
+        border-radius: var(--r-md);
+        padding: 10px 14px;
+        font-size: 11px;
+        line-height: 1.6;
+        color: #1E40AF;
+    }
+
+    /* graph legend */
+    .graph-legend {
+        display: flex; gap: 16px; flex-wrap: wrap;
+        margin-top: 8px;
+    }
+    .legend-item {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 11px;
+        color: var(--text-3);
+    }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .legend-rect { width: 12px; height: 6px; border-radius: 2px; }
+
+    /* image container */
+    #imageContainer img {
+        max-width: 100%;
+        border-radius: var(--r-sm);
+        border: 1px solid var(--border);
+    }
+
+    /* row spacing */
+    .row.g-3 { --bs-gutter-x: 12px; --bs-gutter-y: 12px; }
+    </style>
+</head>
+
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.75); backdrop-filter:blur(4px); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
+    <div class="loading-ring"></div>
+    <p id="loadingMsg" style="margin-top:10px; font-size:12px; color:#6B7280;">처리 중입니다...</p>
+</div>
+
+<div id="outer">
+
+    <!-- ════════════════════════════════════════════════════════
+         NAVIGATION (Left Sidebar)
+    ════════════════════════════════════════════════════════ -->
+    <header class="header order-last" id="tm-header">
+        <div class="sidebar-brand">
+            <div class="brand-logo"><i class="fa fa-satellite-dish"></i></div>
+            <div>
+                <div class="brand-title">TeleAI Ops</div>
+                <div class="brand-sub">트래픽 예측 시스템</div>
+            </div>
+        </div>
+        <div class="sidebar-section-label">메뉴</div>
+        <nav class="navbar">
+            <div class="collapse navbar-collapse single-page-nav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link active" href="#section-4"><i class="fa fa-chart-line"></i> 운영 대시보드</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/report.html"><i class="fa fa-file-alt"></i> 분석 보고서</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+    <button class="navbar-button collapsed" type="button">
+        <span class="menu_icon"><span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span></span>
+    </button>
+
+    <main id="content-box" class="order-first">
+
+        <div id="section-1" class="banner-section section" style="display:none;"></div>
+
+        <!-- ════════════════════════════════════════════════════════
+             TOP BAR
+        ════════════════════════════════════════════════════════ -->
+        <div class="top-bar">
+            <span class="top-bar-title">운영 대시보드</span>
+            <span class="top-bar-sep">|</span>
+            <span class="top-bar-sub">텔레콤 트래픽 예측 · LSTM 모델</span>
+            <div class="top-bar-actions">
+                <!-- Upload -->
+                <form id="uploadForm" method="POST" enctype="multipart/form-data" style="display:inline-flex; align-items:center; gap:8px;">
+                    <label class="file-btn-label" for="fileUpload">
+                        <i class="fa fa-upload" style="font-size:11px;"></i>
+                        CSV 업로드
+                    </label>
+                    <input type="file" id="fileUpload" name="file" accept=".csv">
+                    <span id="fileNameDisplay" style="font-size:11px; color:#9CA3AF;">선택된 파일 없음</span>
+                </form>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════
+             SECTION 4 — OPERATIONS DASHBOARD
+        ════════════════════════════════════════════════════════ -->
+        <section id="section-4">
+            <div style="padding: 0;">
+
+                <!-- empty state -->
+                <div id="noPrediction">
+                    <div class="empty-icon"><i class="fa fa-chart-area"></i></div>
+                    <h4>아직 예측 결과가 없습니다</h4>
+                    <p>상단에서 CSV 파일을 업로드하면<br>예측 그래프와 운영 지표가 표시됩니다.</p>
+                </div>
+
+                <!-- dashboard body -->
+                <div id="dashboardCards" style="display:none;">
+
+                    <!-- KPI 3개 -->
+                    <div class="kpi-grid" style="margin-bottom:12px;">
+                        <div class="kpi-card" id="kpi-rmse">
+                            <div class="kpi-label">현재 RMSE</div>
+                            <div class="kpi-value" id="kpiRmseVal">—</div>
+                            <div class="kpi-sub">인터넷 트래픽 예측 오차</div>
+                        </div>
+                        <div class="kpi-card" id="kpi-status">
+                            <div class="kpi-label">예측 상태</div>
+                            <div class="kpi-value" id="kpiStatusVal">—</div>
+                            <div class="kpi-sub" id="kpiStatusSub"></div>
+                        </div>
+                        <div class="kpi-card" id="kpi-threshold">
+                            <div class="kpi-label">RMSE 임계값</div>
+                            <div class="kpi-value" id="kpiThreshVal">—</div>
+                            <div class="kpi-sub">초과 시 재학습 권고</div>
+                        </div>
+                    </div>
+
+                    <!-- 실측 vs 예측 차트 -->
+                    <div class="row g-3" style="margin-bottom:12px;">
+                        <div class="col-12">
+                            <div class="chart-card">
+                                <div class="chart-card-head">
+                                    <div class="dash-card-title">실측 트래픽 vs 예측 트래픽</div>
+                                    <button class="replay-btn" id="replayBtn">
+                                        새로고침
+                                    </button>
+                                </div>
+                                <div class="chart-card-body">
+                                    <div style="position:relative; height:300px;">
+                                        <canvas id="lifecycleChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="retrainResultBanner"></div>
+
+                    <div class="row g-3" style="margin-bottom:12px;">
+                        <!-- 전후 비교 -->
+                        <div class="col-md-6">
+                            <div class="dash-card">
+                                <div class="dash-card-head">
+                                    <div class="dash-card-title">재학습 전후 RMSE 비교</div>
+                                </div>
+                                <div class="dash-card-body">
+                                    <div id="compareBox">
+                                        <div class="compare-empty">
+                                            재학습 완료 후 전후 RMSE 비교가 표시됩니다.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 재학습 이력 -->
+                        <div class="col-md-6">
+                            <div class="dash-card">
+                                <div class="dash-card-head">
+                                    <div class="dash-card-title">재학습 이력</div>
+                                </div>
+                                <div class="dash-card-body">
+                                    <div id="retrainHistory">
+                                        <div class="history-empty">
+                                            재학습 이력이 없습니다.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 업로드 안내 -->
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="upload-note">
+                                <i class="fa fa-info-circle" style="color:var(--accent);"></i>
+                                최초 실행 시 모델 학습으로 인해 3~10분 소요될 수 있습니다. &nbsp;·&nbsp;
+                                milan_telecom_timeseries_1.csv 파일을 사용하세요.
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /dashboardCards -->
+            </div>
+        </section>
+
+        <!-- Retrain toast -->
+        <div id="retrainToast" class="retrain-toast">
+            <div class="retrain-toast-card">
+                <div class="retrain-toast-head">
+                    <div class="retrain-toast-title">재학습 필요</div>
+                    <button class="toast-close" id="btnToastClose"><i class="fa fa-times"></i></button>
+                </div>
+                <div class="retrain-toast-body">
+                    RMSE 임계값을 초과했습니다. 보고서를 확인하고 재학습 여부를 결정하세요.
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn-primary-action" id="btnViewReport">
+                        <i class="fa fa-file-alt"></i> 보고서 보기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div><!-- #outer -->
+
+<script src="js/jquery-3.3.1.min.js"></script>
+<script src="js/bootstrap.bundle.min.js"></script>
+<script src="js/jquery.singlePageNav.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+    /* 파일 선택 시 파일명 표시 후 즉시 예측 실행 */
+    document.getElementById("fileUpload").addEventListener("change", function () {
+        var name = this.files[0] ? this.files[0].name : "선택된 파일 없음";
+        document.getElementById("fileNameDisplay").textContent = name;
+        if (this.files[0]) {
+            document.getElementById("uploadForm").dispatchEvent(new Event("submit"));
+        }
+    });
+
+    /* 커스텀 toggle */
+    function toggleMode() {
+        var cb    = document.getElementById("modeToggle");
+        var track = document.getElementById("toggleTrack");
+        if (!cb || !track) return;
+        cb.checked = !cb.checked;
+        track.classList.toggle("on", cb.checked);
+        document.getElementById("modeLabel").textContent = cb.checked ? "자동" : "수동";
+        cb.dispatchEvent(new Event("change"));
+    }
+</script>
+<script src="js/post.js?v=2"></script>
+<script src="js/get.js?v=2"></script>
+<script src="js/telecom.js?v=2"></script>
+
+</body>
+</html>
