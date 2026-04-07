@@ -7,6 +7,21 @@ if (btnViewReport) {
     btnViewReport.addEventListener("click", function () {
         var toast = document.getElementById("retrainToast");
         if (toast) toast.classList.remove("show");
+        var panel = document.getElementById("reportPanel");
+        var btnReport = document.getElementById("btnReport");
+
+        if (panel) {
+            panel.style.display = "block";
+            panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        // 대시보드 내 보고서 생성 버튼이 있으면 바로 실행
+        if (btnReport) {
+            btnReport.click();
+            return;
+        }
+
+        // fallback: 별도 report 페이지로 이동
         window.location.href = "/report.html";
     });
 }

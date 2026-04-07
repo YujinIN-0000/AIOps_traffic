@@ -17,14 +17,8 @@ from keras.layers import Dense, LSTM, Dropout
 
 from config import (
     MODEL_SAVE_PATH, MODEL_PLOT_PATH, MODEL_SHAPES_PLOT_PATH,
-    PREDICTION_PLOT_PATH, LOOKBACK, TRAIN_RATIO
+    PREDICTION_PLOT_PATH, LOOKBACK
 )
-
-def _get_splits(n: int):
-    """데이터 크기 n에 맞게 train/test 스텝 수 동적 계산"""
-    train = int(n * TRAIN_RATIO)
-    test  = n - train
-    return train, test
 
 FEATURE_COLS = ["internet", "smsin", "callin", "hour", "dayofweek", "is_weekend"]
 TARGET_IDX   = 0  # internet 컬럼 인덱스
@@ -112,17 +106,16 @@ def train_and_save(df: pd.DataFrame) -> tuple:
     data = agg.values  # shape: (N, 6)
 
     n = len(data)
-    train_steps, test_steps = _get_splits(n)
-    print(f"[train] 전체={n}, train={train_steps}, test={test_steps}")
+    print(f"[train] 전체={n}, train={n} (full dataset)")
 
-    # Scaler는 train 구간만으로 fit (데이터 누수 방지)
-    train_data = data[:train_steps]
+    # 요청사항: 분할 없이 전체 데이터를 학습에 사용
+    train_data = data
     sc = MinMaxScaler(feature_range=(0, 1))
     sc.fit(train_data)
     full_scaled = sc.transform(data)
 
     # train 시퀀스 생성
-    X_train, y_train = _make_sequences(full_scaled, LOOKBACK, train_steps - LOOKBACK)
+    X_train, y_train = _make_sequences(full_scaled, LOOKBACK, n - LOOKBACK)
 
     regressor = Sequential([
         LSTM(units=64, return_sequences=True, input_shape=(LOOKBACK, len(FEATURE_COLS))),
@@ -134,7 +127,8 @@ def train_and_save(df: pd.DataFrame) -> tuple:
         Dense(units=1),
     ])
     regressor.compile(optimizer="adam", loss="mean_squared_error")
-    regressor.fit(X_train, y_train, epochs=3, batch_size=64, verbose=1)
+    # verbose=2: epoch 단위 요약 로그만 출력 (진행바 스팸 방지)
+    regressor.fit(X_train, y_train, epochs=3, batch_size=64, verbose=2)
 
     os.makedirs(os.path.dirname(MODEL_SAVE_PATH), exist_ok=True)
     regressor.save(MODEL_SAVE_PATH)
@@ -149,9 +143,9 @@ def train_and_save(df: pd.DataFrame) -> tuple:
     except Exception:
         pass
 
-    # 최종 평가는 test 구간만 사용
-    test_start = train_steps
-    X_test, _ = _make_sequences(full_scaled, test_start, test_steps)
+    # 참고 RMSE: 전체 기간(LOOKBACK 이후) 기준
+    test_start = LOOKBACK
+    X_test, _ = _make_sequences(full_scaled, test_start, n - test_start)
 
     pred_scaled = regressor.predict(X_test, verbose=0)
 
@@ -178,15 +172,13 @@ def process(df: pd.DataFrame) -> tuple:
     data = agg.values
 
     n = len(data)
-    train_steps, test_steps = _get_splits(n)
-
-    train_data = data[:train_steps]
+    train_data = data
     sc = MinMaxScaler(feature_range=(0, 1))
     sc.fit(train_data)
     full_scaled = sc.transform(data)
 
-    test_start = train_steps
-    X_test, _ = _make_sequences(full_scaled, test_start, test_steps)
+    test_start = LOOKBACK
+    X_test, _ = _make_sequences(full_scaled, test_start, n - test_start)
 
     mdl = load_model(MODEL_SAVE_PATH)
     pred_scaled = mdl.predict(X_test, verbose=0)

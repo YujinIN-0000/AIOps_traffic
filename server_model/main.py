@@ -43,6 +43,7 @@ PUBLIC_DIR = STD_DIR / "public"
 
 APP_ROOT_PATH = os.getenv("APP_ROOT_PATH", "").rstrip("/")
 timezone      = pytz.timezone("Asia/Seoul")
+CUMULATIVE_DATA_PATH = Path(UPLOAD_DIR) / "_cumulative_training.csv"
 
 # ------------------------------------------------------------------
 # 전역 상태 (단일 프로세스 데모용)
@@ -53,6 +54,7 @@ app_state: dict = {
     "needs_retrain"      : False,
     "mode"               : "manual",   # "manual" | "auto"
     "retrain_history"    : [],         # [{timestamp, old_rmse, new_rmse}]
+    "cumulative_dataset_path": str(CUMULATIVE_DATA_PATH),
 }
 
 router = APIRouter()
@@ -135,6 +137,50 @@ def _append_retrain_log(record: dict):
     log_path.write_text(json.dumps(logs, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _merge_to_cumulative(new_df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """
+    누적 학습셋 갱신:
+    - 최초: 원본 데이터(있으면) + 신규 업로드
+    - 이후: 기존 누적 + 신규 업로드
+    """
+    frames = []
+    prev_rows = 0
+    original_rows = 0
+    if CUMULATIVE_DATA_PATH.exists():
+        try:
+            prev_df = pd.read_csv(CUMULATIVE_DATA_PATH)
+            prev_rows = len(prev_df)
+            frames.append(prev_df)
+        except Exception:
+            pass
+    else:
+        original_path = Path(ORIGINAL_DATA_PATH)
+        if original_path.exists():
+            try:
+                original_df = pd.read_csv(original_path)
+                original_rows = len(original_df)
+                frames.append(original_df)
+            except Exception:
+                pass
+
+    frames.append(new_df)
+    merged = pd.concat(frames, ignore_index=True) if len(frames) > 1 else new_df.copy()
+    raw_rows = len(merged)
+    # 동일 파일 재업로드 시 중복 누적 방지
+    merged = merged.drop_duplicates().reset_index(drop=True)
+    dedup_removed = raw_rows - len(merged)
+    CUMULATIVE_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(CUMULATIVE_DATA_PATH, index=False)
+    stats = {
+        "new_rows": len(new_df),
+        "prev_rows": prev_rows,
+        "original_rows": original_rows,
+        "merged_rows": len(merged),
+        "dedup_removed": dedup_removed,
+    }
+    return merged, stats
+
+
 def _generate_template_report(rmse: float, needs: bool) -> str:
     status = "임계값 초과" if needs else "정상 범위"
     rec    = "재학습 및 재배포를 권고합니다." if needs else "현 모델 유지를 권고합니다."
@@ -200,6 +246,22 @@ async def init_dashboard():
     if not Path(MODEL_SAVE_PATH).exists():
         return {"model_ready": False, "message": "저장된 모델 없음"}
 
+    # 가장 최근 차트 결과가 있으면 그대로 반환 (재학습/업로드 반영)
+    if app_state.get("last_chart_payload"):
+        payload = app_state["last_chart_payload"]
+        return {
+            "model_ready"             : True,
+            "skip_retrain_check"      : True,
+            "result_evaluating_LSTM"  : payload.get("result_evaluating_LSTM"),
+            "needs_retrain"           : False,
+            "rmse_threshold"          : RMSE_THRESHOLD,
+            "mode"                    : app_state["mode"],
+            "actual_series"           : payload.get("actual_series", []),
+            "pred_series"             : payload.get("pred_series", []),
+            "time_index"              : payload.get("time_index", []),
+            "retrain_history"         : app_state.get("retrain_history", []),
+        }
+
     # 최근 업로드 데이터가 있으면 우선 사용
     last_path = app_state.get("last_dataset_path")
     candidate_path = Path(last_path) if last_path else Path(ORIGINAL_DATA_PATH)
@@ -254,6 +316,15 @@ async def post_data_set(file: UploadFile = File(...)):
         await asyncio.to_thread(file_location.write_bytes, contents)
 
         dataset = await _read_csv_async(file_location)
+        cumulative_dataset, merge_stats = await asyncio.to_thread(_merge_to_cumulative, dataset)
+        print(
+            "[upload] rows "
+            f"new_csv={merge_stats['new_rows']}, "
+            f"prev_cumulative={merge_stats['prev_rows']}, "
+            f"original_seed={merge_stats['original_rows']}, "
+            f"total_cumulative={merge_stats['merged_rows']}, "
+            f"dedup_removed={merge_stats['dedup_removed']}"
+        )
 
         weight_mod = importlib.import_module(".weight_used_model", package=__package__)
         model_mod  = importlib.import_module(".model",             package=__package__)
@@ -261,9 +332,12 @@ async def post_data_set(file: UploadFile = File(...)):
         # 저장된 모델이 없으면 최초 학습
         if not Path(MODEL_SAVE_PATH).exists():
             print("[upload] No saved model found. Training from scratch...")
-            await asyncio.to_thread(model_mod.train_and_save, dataset)
+            await asyncio.to_thread(model_mod.train_and_save, cumulative_dataset)
 
-        # 추론
+        # 누적 데이터(기존+신규) 전체를 그래프용으로 사용
+        combined_df = cumulative_dataset
+
+        # RMSE는 업로드 데이터 기준
         plot_path, rmse, actual_list, pred_list, date_list = await asyncio.to_thread(weight_mod.process, dataset)
         img1 = Path(plot_path)
         if not img1.exists():
@@ -271,10 +345,29 @@ async def post_data_set(file: UploadFile = File(...)):
 
         retrain_needed = weight_mod.needs_retrain(rmse)
 
+        # 그래프는 합산 데이터 기준으로 교체
+        if combined_df is not None and len(combined_df) > len(dataset):
+            comb_plot, _, comb_actual, comb_pred, comb_dates = await asyncio.to_thread(
+                weight_mod.process, combined_df
+            )
+            comb_img = Path(comb_plot)
+            if comb_img.exists():
+                img1 = comb_img
+            actual_list = comb_actual
+            pred_list   = comb_pred
+            date_list   = comb_dates
+
         # 전역 상태 갱신
         app_state["last_rmse"]         = rmse
         app_state["last_dataset_path"] = str(file_location)
         app_state["needs_retrain"]     = retrain_needed
+        app_state["last_chart_payload"] = {
+            "actual_series": actual_list,
+            "pred_series"  : pred_list,
+            "time_index"   : date_list,
+            "rmse_threshold": RMSE_THRESHOLD,
+            "result_evaluating_LSTM": round(rmse, 4),
+        }
 
         result = {
             "result_visualizing_LSTM" : _b64_png(img1),
@@ -292,7 +385,7 @@ async def post_data_set(file: UploadFile = File(...)):
         # 자동 모드: 임계 초과 시 즉시 재학습
         if retrain_needed and app_state["mode"] == "auto":
             print("[upload] Auto mode: triggering retrain...")
-            await asyncio.to_thread(model_mod.train_and_save, dataset)
+            await asyncio.to_thread(model_mod.train_and_save, cumulative_dataset)
             new_plot, new_rmse, new_actual, new_pred, new_dates = await asyncio.to_thread(weight_mod.process, dataset)
             app_state["last_rmse"]     = new_rmse
             app_state["needs_retrain"] = new_rmse > RMSE_THRESHOLD
@@ -304,10 +397,28 @@ async def post_data_set(file: UploadFile = File(...)):
             })
             result["auto_retrained"] = True
             result["new_rmse"]       = round(new_rmse, 4)
-            result["result_visualizing_LSTM"] = _b64_png(Path(new_plot))
-            result["actual_series"]  = new_actual
-            result["pred_series"]    = new_pred
-            result["time_index"]     = new_dates
+            # 재학습 후 그래프도 합산 데이터 기준으로 교체
+            if combined_df is not None and len(combined_df) > len(dataset):
+                comb_plot, _, comb_actual, comb_pred, comb_dates = await asyncio.to_thread(
+                    weight_mod.process, combined_df
+                )
+                comb_img = Path(comb_plot)
+                result["result_visualizing_LSTM"] = _b64_png(comb_img) if comb_img.exists() else _b64_png(Path(new_plot))
+                result["actual_series"]  = comb_actual
+                result["pred_series"]    = comb_pred
+                result["time_index"]     = comb_dates
+            else:
+                result["result_visualizing_LSTM"] = _b64_png(Path(new_plot))
+                result["actual_series"]  = new_actual
+                result["pred_series"]    = new_pred
+                result["time_index"]     = new_dates
+            app_state["last_chart_payload"] = {
+                "actual_series": result["actual_series"],
+                "pred_series"  : result["pred_series"],
+                "time_index"   : result["time_index"],
+                "rmse_threshold": RMSE_THRESHOLD,
+                "result_evaluating_LSTM": round(new_rmse, 4),
+            }
 
         return result
 
@@ -333,20 +444,39 @@ async def retrain():
         uploaded_df = await _read_csv_async(Path(dataset_path))
         old_rmse    = app_state.get("last_rmse", 0.0)
 
-        # 원본 학습 데이터 + 업로드 CSV 합산
-        original_path = Path(ORIGINAL_DATA_PATH)
-        if original_path.exists() and str(dataset_path) != str(original_path):
-            original_df = await _read_csv_async(original_path)
-            dataset = pd.concat([original_df, uploaded_df], ignore_index=True)
-            print(f"[retrain] 원본 {len(original_df)}행 + 업로드 {len(uploaded_df)}행 = 합산 {len(dataset)}행")
+        # 누적 학습 데이터(기존+신규 전체) 기준으로 재학습
+        if CUMULATIVE_DATA_PATH.exists():
+            dataset = await _read_csv_async(CUMULATIVE_DATA_PATH)
+            print(
+                "[retrain] rows "
+                f"uploaded_csv={len(uploaded_df)}, "
+                f"cumulative_total={len(dataset)}"
+            )
         else:
-            dataset = uploaded_df
+            dataset, merge_stats = await asyncio.to_thread(_merge_to_cumulative, uploaded_df)
+            print(
+                "[retrain] rows "
+                f"uploaded_csv={merge_stats['new_rows']}, "
+                f"prev_cumulative={merge_stats['prev_rows']}, "
+                f"original_seed={merge_stats['original_rows']}, "
+                f"total_cumulative={merge_stats['merged_rows']}, "
+                f"dedup_removed={merge_stats['dedup_removed']}"
+            )
 
         await asyncio.to_thread(model_mod.train_and_save, dataset)
         # 평가/시각화는 업로드 데이터 기준으로 수행
         new_plot, new_rmse, actual_list, pred_list, date_list = await asyncio.to_thread(
             weight_mod.process, uploaded_df
         )
+        # 그래프는 누적 데이터 기준으로 교체
+        if len(dataset) > len(uploaded_df):
+            comb_plot, _, comb_actual, comb_pred, comb_dates = await asyncio.to_thread(
+                weight_mod.process, dataset
+            )
+            new_plot   = comb_plot
+            actual_list = comb_actual
+            pred_list   = comb_pred
+            date_list   = comb_dates
 
         app_state["last_rmse"]     = new_rmse
         app_state["needs_retrain"] = new_rmse > RMSE_THRESHOLD
@@ -356,6 +486,13 @@ async def retrain():
             "old_rmse" : round(old_rmse, 4),
             "new_rmse" : round(new_rmse, 4),
         })
+        app_state["last_chart_payload"] = {
+            "actual_series": actual_list,
+            "pred_series"  : pred_list,
+            "time_index"   : date_list,
+            "rmse_threshold": RMSE_THRESHOLD,
+            "result_evaluating_LSTM": round(new_rmse, 4),
+        }
 
         img = Path(new_plot)
         return {
